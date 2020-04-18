@@ -1,5 +1,4 @@
 // 实现一个属于自己的Promise
-// 文章链接: https://segmentfault.com/a/1190000016550260
 const PENDING = 'pending'
 const FULFILLD = 'fulfiled'
 const PROJECTED = 'projected'
