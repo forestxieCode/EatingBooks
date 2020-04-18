@@ -59,7 +59,7 @@ var observer = {
             return;
         }
         for(var i=0;i<fns.length; i++){
-            if(fns[i]=== fn){
+            if(fns[i] === fn){
                 fns.splice(i,1)
             }
         }
