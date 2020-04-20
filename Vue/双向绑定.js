@@ -1,5 +1,5 @@
 function defineReactive(data, key, value){
-    obServer(value) // 递归遍历所有子属性
+    observe(value) // 递归遍历所有子属性
     var dep = new Dep(); 
     Object.defineProperty(data, key, {
         configurable:true,
@@ -19,8 +19,8 @@ function defineReactive(data, key, value){
     })
 }
 Dep.target = null
-
-function obServer(data){
+// 数据劫持
+function observe(data){
     if (!data || typeof data !== 'object') {
         return;
     }
@@ -46,128 +46,119 @@ Dep.prototype = {
 }
 
 //  Watcher 
-function Watcher(vm, exp , cb){
-    this.vm = vm
-    this.exp = exp
-    this.cb = cb
-    this.value = this.get() //将自己添加到订阅器的操作
+function Watcher(vm, exp, cb) {
+    this.cb = cb;
+    this.vm = vm;
+    this.exp = exp;
+    this.value = this.get();  // 将自己添加到订阅器的操作
 }
+
 Watcher.prototype = {
-    constructor: Watcher,
-    update: function(){
-        this.run()
+    update: function() {
+        this.run();
     },
-    run: function(){
-        let value = this.vm.data[this.exp] 
-        let oldValue = this.value
-        if(value !== oldValue) {
-            this.value = value
-            this.cb.call(this.vm, value, oldValue)
+    run: function() {
+        var value = this.vm.data[this.exp];
+        var oldVal = this.value;
+        if (value !== oldVal) {
+            this.value = value;
+            this.cb.call(this.vm, value, oldVal);
         }
     },
-    get: function(){
-        Dep.target = this // 缓存自己
-        let value = this.vm.data[this.exp] // 强制执行监听器里的get函数
-        Dep.target  = null // 释放自己
-        return value
+    get: function() {
+        Dep.target = this;  // 缓存自己
+        var value = this.vm.data[this.exp]  // 强制执行监听器里的get函数
+        Dep.target = null;  // 释放自己
+        return value;
     }
+};
+// Compile
+function Compile(el, vm) {
+    this.vm = vm;
+    this.el = document.querySelector(el);
+    this.fragment = null;
+    this.init();
 }
-function Compile(options,vm){
-    this.vm = vm
-    this.vnode = this.nodeToFragment(document.querySelector(options.el))
-    this.compileElement(this.vnode)
-}
+
 Compile.prototype = {
-    // 将实际的dom转换到虚拟节点
-    nodeToFragment:function (el){
-        let fragment = document.createDocumentFragment()
-        let child = el.firstChild;
-        while(child){
-            fragment.appendChild(child)
+    init: function () {
+        if (this.el) {
+            this.fragment = this.nodeToFragment(this.el);
+            this.compileElement(this.fragment);
+            this.el.appendChild(this.fragment);
+        } else {
+            console.log('Dom元素不存在');
+        }
+    },
+    nodeToFragment: function (el) {
+        var fragment = document.createDocumentFragment();
+        var child = el.firstChild;
+        while (child) {
+            // 将Dom元素移入fragment中
+            fragment.appendChild(child);
             child = el.firstChild
         }
-        return fragment
+        return fragment;
     },
-    compileElement:function (el) {
-        let childNodes = el.childNodes;
-        let self = this;
-        [].slice.call(childNodes).forEach(function(node){
-            var reg = /\{\{(.*)\}\}/;
+    compileElement: function (el) {
+        var childNodes = el.childNodes;
+        var self = this;
+        [].slice.call(childNodes).forEach(function(node) {
+            var reg = /\{\{\s*(.*?)\s*\}\}/;
             var text = node.textContent;
-    
-            if(node.nodeType == 1 && reg.test(text)){
-                console.log(reg.exec(text)[1])
+            if (self.isTextNode(node) && reg.test(text)) {  // 判断是否是符合这种形式{{}}的指令
                 self.compileText(node, reg.exec(text)[1]);
             }
-    
-            if(node.childNodes && node.childNodes.length){
-                self.compileElement(node) // 继续递归遍历子节点
+
+            if (node.childNodes && node.childNodes.length) {
+                self.compileElement(node);  // 继续递归遍历子节点
             }
-        })
+        });
     },
-    updateText:function (node, value){
-        console.log(node,value)
-        node.textContent = typeof value == 'undefined' ? '': value
+    compileText: function(node, exp) {
+        var self = this;
+        var initText = this.vm[exp];
+        this.updateText(node, initText);  // 将初始化的数据初始化到视图中
+        new Watcher(this.vm, exp, function (value) { // 生成订阅器并绑定更新函数
+            self.updateText(node, value);
+        });
     },
-    compileText:function (node, exp){
-        let self = this
-        let iniText = this.vm[exp]
-        debugger
-        console.log(exp,this.vm)
-        this.updateText(node, iniText) // 将初始化的数据初始化到视图中
-        new Watcher(this.vm, exp, function(value){ // 生成订阅并绑定更新函数
-            self.updateText(node, value)
-        })
+    updateText: function (node, value) {
+        node.textContent = typeof value == 'undefined' ? '' : value;
+    },
+    isTextNode: function(node) {
+        return node.nodeType == 3;
     }
 }
+function SelfVue (options) {
+    var self = this;
+    this.vm = this;
+    this.data = options.data;
 
+    Object.keys(this.data).forEach(function(key) {
+        self.proxyKeys(key);
+    });
 
-function SelfVue(options){
-    // this.data = data
-
-    // // 绑定代理属性
-    // Object.keys(data).forEach(key => {
-    //     this.proxyKeys(key)
-    // })
-    // obServer(data)
-    // el.innerHTML = this.data[exp]  // 初始化模板数据的值
-    // new Watcher(this, exp, function(value,oldValue){
-    //     if(value !== oldValue){
-    //         el.innerHTML = this.data[exp] 
-    //     }
-    // })
-    var self = this
-    this.vm = this
-    this.data = options
-
-    Object.keys(this.data.data).forEach(function(key){
-        self.proxyKeys(key)
-    })
-    obServer(this.data.data)
-    
-    new Compile(options, this.vm)
-
-    return self
+    observe(this.data);
+    new Compile(options.el, this.vm);
+    return this;
 }
 
-// 代理函数
 SelfVue.prototype = {
-    proxyKeys:function(key){
-        let self = this
-        Object.defineProperty(self, key, {
-            enumerable:true,
-            configurable:true,
-            get:function proxyGetter(){
+    proxyKeys: function (key) {
+        var self = this;
+        Object.defineProperty(this, key, {
+            enumerable: false,
+            configurable: true,
+            get: function proxyGetter() {
                 return self.data[key];
             },
-            set:function proxySetter(newVal) {
-                self.data[key] = newVal
+            set: function proxySetter(newVal) {
+                self.data[key] = newVal;
             }
-        })
+        });
     }
 }
-
-
 
 
 
